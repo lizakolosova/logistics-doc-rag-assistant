@@ -4,10 +4,10 @@ from uuid import uuid4
 
 import pytest
 
-from app.config import settings
-from app.exceptions import RetrievalError
-from app.models.schemas import RetrievedChunk
-from app.retrieval.vector_search import vector_search
+from  backend.app.config import settings
+from  backend.app.exceptions import RetrievalError
+from  backend.app.models.schemas import RetrievedChunk
+from  backend.app.retrieval.vector_search import vector_search
 
 
 def _make_openai_mock() -> tuple[MagicMock, AsyncMock]:

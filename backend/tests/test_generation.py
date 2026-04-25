@@ -2,9 +2,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.exceptions import GenerationError
-from app.generation.prompt_builder import build_messages, extract_citations
-from app.models.schemas import RetrievedChunk
+from backend.app.exceptions import GenerationError
+from backend.app.generation.prompt_builder import build_messages, extract_citations
+from backend.app.models.schemas import RetrievedChunk
+
+from openai import RateLimitError
+from backend.app.generation.llm_client import _RETRY_DELAYS, generate_answer
 
 
 def _make_chunk(
@@ -99,8 +102,6 @@ def test_extract_citations_maps_correctly() -> None:
     assert citations[1].chunk_text == chunks[1].text
 
 async def test_generate_answer_returns_string() -> None:
-    from app.generation.llm_client import generate_answer
-
     mock_response = _make_openai_response("The indemnity clause states that...")
     mock_client = AsyncMock()
     mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
@@ -114,9 +115,6 @@ async def test_generate_answer_returns_string() -> None:
 
 
 async def test_generate_answer_retries_on_rate_limit() -> None:
-    from openai import RateLimitError
-
-    from app.generation.llm_client import generate_answer
 
     mock_response = _make_openai_response("Answer after retry.")
     rate_limit_exc = RateLimitError("Rate limited", response=MagicMock(), body={})
@@ -135,10 +133,6 @@ async def test_generate_answer_retries_on_rate_limit() -> None:
 
 
 async def test_generate_answer_raises_after_max_retries() -> None:
-    from openai import RateLimitError
-
-    from app.generation.llm_client import _RETRY_DELAYS, generate_answer
-
     rate_limit_exc = RateLimitError("Rate limited", response=MagicMock(), body={})
     total_attempts = len(_RETRY_DELAYS) + 1
 

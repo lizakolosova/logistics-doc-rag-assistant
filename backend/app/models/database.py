@@ -13,7 +13,6 @@ from app.models.schemas import DocumentStatus
 class Base(DeclarativeBase):
     pass
 
-
 class Document(Base):
 
     __tablename__ = "documents"

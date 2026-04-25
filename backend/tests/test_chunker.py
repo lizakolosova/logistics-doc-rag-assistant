@@ -1,9 +1,7 @@
 from uuid import UUID, uuid4
 
-import pytest
-
-from app.ingestion.chunker import chunk_sections
-from app.models.schemas import ParsedSection, TextChunk
+from backend.app.ingestion.chunker import chunk_sections
+from backend.app.models.schemas import ParsedSection, TextChunk
 
 
 def _section(

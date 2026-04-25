@@ -7,14 +7,9 @@ import fitz
 import pytest
 from docx import Document
 
-from app.exceptions import DocumentParseError, DocumentTooLargeError, UnsupportedFormatError
-from app.ingestion.parser import parse_document, parse_docx, parse_pdf
-
-
-# ---------------------------------------------------------------------------
-# parse_pdf
-# ---------------------------------------------------------------------------
-
+from backend.app.exceptions import DocumentParseError, DocumentTooLargeError, UnsupportedFormatError
+from backend.app.ingestion.parser import parse_document, parse_docx, parse_pdf
+import backend.app.ingestion.parser as parser_module
 
 def test_parse_pdf_extracts_text(pdf_two_pages: Path, document_id: UUID) -> None:
     sections = parse_pdf(pdf_two_pages, document_id)
@@ -39,12 +34,6 @@ def test_parse_pdf_image_only_raises(pdf_image_only: Path, document_id: UUID) ->
     assert "scanned image" in exc_info.value.reason
     assert "Page 1" in exc_info.value.reason
     assert exc_info.value.filename == pdf_image_only.name
-
-
-# ---------------------------------------------------------------------------
-# parse_docx
-# ---------------------------------------------------------------------------
-
 
 def test_parse_docx_extracts_text(docx_with_headings: Path, document_id: UUID) -> None:
     sections = parse_docx(docx_with_headings, document_id)
@@ -74,12 +63,6 @@ def test_parse_docx_no_headings_uses_default(docx_no_headings: Path, document_id
     assert "Second paragraph" in sections[0].text
     assert sections[0].page_number is None
 
-
-# ---------------------------------------------------------------------------
-# parse_document dispatcher
-# ---------------------------------------------------------------------------
-
-
 def test_parse_document_unsupported_format_raises(
     tmp_path: Path, document_id: UUID
 ) -> None:
@@ -98,14 +81,11 @@ def test_parse_document_too_large_raises(
     document_id: UUID,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # --- size limit ---
     pdf_path = tmp_path / "small.pdf"
     doc = fitz.open()
     doc.new_page().insert_text((50, 72), "hello")
     doc.save(str(pdf_path))
     doc.close()
-
-    import app.ingestion.parser as parser_module
 
     monkeypatch.setattr(parser_module.settings, "max_file_size_mb", 0)
     with pytest.raises(DocumentTooLargeError) as exc_info:
@@ -114,7 +94,6 @@ def test_parse_document_too_large_raises(
     assert exc_info.value.limit_type == "size"
     assert exc_info.value.filename == "small.pdf"
 
-    # --- page limit ---
     monkeypatch.setattr(parser_module.settings, "max_file_size_mb", 50)
     monkeypatch.setattr(parser_module.settings, "max_pages", 0)
 

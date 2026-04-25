@@ -3,9 +3,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.models.schemas import RetrievedChunk
-from app.retrieval.bm25_search import bm25_search
-from app.retrieval.hybrid import hybrid_search, reciprocal_rank_fusion
+from backend.app.models.schemas import RetrievedChunk
+from  backend.app.retrieval.bm25_search import bm25_search
+from  backend.app.retrieval.hybrid import hybrid_search, reciprocal_rank_fusion
 
 def _make_chunk(chroma_id: str, doc_id: str, page: int = 1) -> MagicMock:
     chunk = MagicMock()

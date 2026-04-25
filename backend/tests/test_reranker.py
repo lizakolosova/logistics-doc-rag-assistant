@@ -3,9 +3,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.exceptions import RetrievalError
-from app.models.schemas import RetrievedChunk
-from app.retrieval.reranker import rerank
+from backend.app.exceptions import RetrievalError
+from backend.app.models.schemas import RetrievedChunk
+from backend.app.retrieval.reranker import rerank
+import httpx
+
+from backend.app.api.routes_query import _get_session
+from backend.app.main import app
 
 
 def _make_chunk(chunk_id: str, doc_id: str, score: float = 0.5) -> RetrievedChunk:
@@ -88,11 +92,6 @@ def test_rerank_raises_on_model_failure() -> None:
 
 
 async def test_query_endpoint_full_pipeline() -> None:
-    import httpx
-
-    from app.api.routes_query import _get_session
-    from app.main import app
-
     doc_id = "doc-1"
     hybrid_chunks = [_make_chunk(f"c{i}", doc_id, 0.9 - i * 0.1) for i in range(1, 5)]
     reranked = [_make_chunk("c2", doc_id, 9.1), _make_chunk("c1", doc_id, 7.2)]

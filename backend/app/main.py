@@ -5,7 +5,7 @@ from typing import AsyncGenerator
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from app.exceptions import (
+from backend.app.exceptions import (
     AppError,
     DocumentParseError,
     DocumentTooLargeError,
@@ -14,12 +14,16 @@ from app.exceptions import (
     UnsupportedFormatError,
 )
 
+from backend.app.models.database import Base, get_async_engine
+from backend.app.api.routes_documents import router as documents_router
+from backend.app.api.routes_eval import router as eval_router
+from backend.app.api.routes_query import router as query_router
+
 logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    from app.models.database import Base, get_async_engine
 
     engine = get_async_engine()
     async with engine.begin() as conn:
@@ -73,12 +77,9 @@ async def generic_app_error_handler( request: Request, exc: AppError) -> JSONRes
     logger.error("Unhandled application error: %s", exc)
     return JSONResponse(status_code=500, content={"detail": str(exc)})
 
-from app.api.routes_documents import router as documents_router
-from app.api.routes_query import router as query_router
-
 app.include_router(documents_router)
 app.include_router(query_router)
-
+app.include_router(eval_router)
 
 @app.get("/health", tags=["ops"])
 async def health() -> dict[str, str]:

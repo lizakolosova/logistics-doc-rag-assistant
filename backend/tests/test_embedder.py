@@ -5,10 +5,10 @@ from uuid import uuid4
 
 import pytest
 
-from app.exceptions import EmbeddingError
-from app.ingestion.embedder import embed_chunks, ingest_document, store_in_chroma
-from app.models.database import Document
-from app.models.schemas import DocumentStatus, TextChunk
+from backend.app.exceptions import EmbeddingError
+from backend.app.ingestion.embedder import embed_chunks, ingest_document, store_in_chroma
+from backend.app.models.database import Document
+from backend.app.models.schemas import DocumentStatus, TextChunk
 
 
 def _make_chunks(n: int) -> list[TextChunk]:

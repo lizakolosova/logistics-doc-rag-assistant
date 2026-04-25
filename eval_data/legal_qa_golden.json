@@ -1,0 +1,42 @@
+[
+  {
+    "id": "q1",
+    "question": "What is the notice period for contract termination?",
+    "expected_answer": "The notice period for contract termination is thirty (30) days written notice delivered to the other party.",
+    "relevant_sources": [
+      {"file": "sample_contract.pdf", "page": 4}
+    ]
+  },
+  {
+    "id": "q2",
+    "question": "What is the governing law for this agreement?",
+    "expected_answer": "The agreement is governed by the laws of the State of New York, without regard to its conflict of law provisions.",
+    "relevant_sources": [
+      {"file": "sample_contract.pdf", "page": 8}
+    ]
+  },
+  {
+    "id": "q3",
+    "question": "What is the limitation of liability cap stated in the agreement?",
+    "expected_answer": "The aggregate liability of either party shall not exceed the total fees paid by Client in the twelve (12) months immediately preceding the event giving rise to the claim.",
+    "relevant_sources": [
+      {"file": "sample_contract.pdf", "page": 6}
+    ]
+  },
+  {
+    "id": "q4",
+    "question": "Does the agreement contain a non-solicitation clause?",
+    "expected_answer": "Yes, the agreement contains a non-solicitation clause in Section 9.2 prohibiting either party from soliciting or hiring the other party's employees or contractors for a period of two (2) years following the termination or expiration of the agreement.",
+    "relevant_sources": [
+      {"file": "sample_contract.pdf", "page": 7}
+    ]
+  },
+  {
+    "id": "q5",
+    "question": "Does the contract include an indemnification provision covering third-party intellectual property claims?",
+    "expected_answer": "Yes, Section 7.1 provides that the Service Provider shall indemnify, defend, and hold harmless the Client against any third-party claims alleging that the deliverables infringe upon any patent, copyright, trademark, or trade secret right.",
+    "relevant_sources": [
+      {"file": "sample_contract.pdf", "page": 5}
+    ]
+  }
+]

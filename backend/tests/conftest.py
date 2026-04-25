@@ -9,7 +9,7 @@ import fitz
 import pytest
 from docx import Document
 
-from app.models.schemas import ParsedSection
+from backend.app.models.schemas import ParsedSection
 
 @pytest.fixture()
 def pdf_two_pages(tmp_path: Path) -> Path:
