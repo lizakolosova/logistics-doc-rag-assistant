@@ -23,7 +23,7 @@ def _ensure_configured() -> None:
 
 
 def _build_gemini_request(messages: list[dict]) -> tuple[str | None, list[dict]]:
-    """Split OpenAI-format messages into a Gemini system instruction and content list."""
+    """Split standard chat-format messages into a Gemini system instruction and content list."""
     system_instruction: str | None = None
     contents: list[dict] = []
     for msg in messages:
@@ -45,7 +45,7 @@ async def generate_answer(
     """Call Gemini and return the answer as a string or async stream.
 
     Args:
-        messages: OpenAI-format message list (system + user at minimum).
+        messages: Standard chat-format message list (system + user at minimum).
         stream: If True, returns an AsyncGenerator yielding token deltas.
 
     Returns:

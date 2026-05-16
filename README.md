@@ -89,10 +89,10 @@ The system evaluates retrieval quality and generation quality separately, using 
 
 | Metric | Score |
 |---|---|
-| Context Precision | run eval to populate |
-| Context Recall | run eval to populate |
-| Faithfulness | run eval to populate |
-| Answer Relevancy | run eval to populate |
+| Context Precision | 100% |
+| Context Recall | 100% |
+| Faithfulness | N/A — see Known Limitations |
+| Answer Relevancy | N/A — see Known Limitations |
 
 Run evaluation via the **Evaluation** tab in the UI, or from the command line:
 
@@ -114,6 +114,12 @@ curl -X POST http://localhost:8080/api/eval/run
 5. **Rollback-on-failure ingestion.** If any stage of ingestion fails (parsing, embedding, ChromaDB write, Postgres write), the system rolls back all partial writes and marks the document as `failed` with the specific error reason. There is no partial-ingest state: a document is either fully ready or it never existed. This keeps retrieval clean — no half-ingested chunks produce spurious search results.
 
 6. **No auth / single-user scope.** Authentication (JWT, sessions, per-user ChromaDB namespacing) is well-understood engineering but orthogonal to demonstrating RAG system design. The database schema uses a `user_id`-prefixable collection naming convention so per-user isolation can be wired in without restructuring the data model.
+
+## Known Limitations
+
+- **RAGAS generation metrics unavailable.** The RAGAS library's `faithfulness` and `answer_relevancy` metrics rely on asyncio internals that conflict with `uvloop` (used by the FastAPI container). Evaluation falls back to `None` for these metrics rather than aborting the run. Heuristic retrieval metrics (Context Precision / Context Recall) are unaffected.
+- **Scanned PDFs not supported.** The parser detects image-only pages and rejects them with a clear error. Only text-based PDFs are processed.
+- **Single-user, no authentication.** There is no login, session isolation, or per-user document namespace. All uploaded documents are visible to any client that can reach the API.
 
 ## What I'd Build Next
 
