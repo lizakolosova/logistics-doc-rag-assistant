@@ -101,3 +101,25 @@ def test_parse_document_too_large_raises(
         parse_document(pdf_path, document_id)
 
     assert exc_info.value.limit_type == "pages"
+
+
+def test_parse_document_docx_too_many_sections_raises(
+    tmp_path: Path,
+    document_id: UUID,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    docx_path = tmp_path / "large.docx"
+    doc = Document()
+    for i in range(5):
+        doc.add_paragraph(f"Paragraph number {i}.")
+    doc.save(str(docx_path))
+
+    monkeypatch.setattr(parser_module.settings, "max_pages", 3)
+
+    with pytest.raises(DocumentTooLargeError) as exc_info:
+        parse_document(docx_path, document_id)
+
+    assert exc_info.value.limit_type == "sections"
+    assert exc_info.value.filename == "large.docx"
+    assert exc_info.value.actual == 5
+    assert exc_info.value.limit == 3

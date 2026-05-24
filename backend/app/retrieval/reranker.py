@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import time
 from typing import Any
@@ -19,7 +20,7 @@ def _get_cross_encoder() -> Any:
     return _cross_encoder
 
 
-def rerank(
+async def rerank(
     query: str,
     chunks: list[RetrievedChunk],
     top_k: int | None = None,
@@ -43,7 +44,7 @@ def rerank(
     try:
         cross_encoder = _get_cross_encoder()
         pairs = [(query, chunk.text) for chunk in chunks]
-        raw_scores = cross_encoder.predict(pairs)
+        raw_scores = await asyncio.to_thread(cross_encoder.predict, pairs)
         scores = [float(s) for s in raw_scores]
     except Exception as exc:
         raise RetrievalError(str(exc)) from exc

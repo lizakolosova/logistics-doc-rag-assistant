@@ -27,4 +27,6 @@ class Settings(BaseSettings):
 
     eval_data_path: str = "/app/eval_data/legal_qa_golden.json"
 
+    prompt_chunk_max_chars: int = 1500
+
 settings = Settings()

@@ -7,9 +7,9 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.dependencies import get_bm25_index, get_session
 from app.generation.llm_client import generate_answer
 from app.generation.prompt_builder import build_messages, extract_citations
-from app.models.database import get_async_session
 from app.models.schemas import QueryRequest, QueryResponse
 from app.retrieval.hybrid import hybrid_search
 from app.retrieval.reranker import rerank
@@ -19,16 +19,11 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/query", tags=["query"])
 
 
-async def _get_session() -> AsyncSession:
-    session_factory = get_async_session()
-    async with session_factory() as session:
-        yield session
-
-
 @router.post("", response_model=QueryResponse)
 async def query_documents(
     body: QueryRequest,
-    session: AsyncSession = Depends(_get_session),
+    session: AsyncSession = Depends(get_session),
+    bm25_index: tuple = Depends(get_bm25_index),
 ) -> QueryResponse:
     """Run the full RAG pipeline and return a structured answer with citations."""
     start = time.monotonic()
@@ -39,10 +34,11 @@ async def query_documents(
         session,
         top_k=k * 2,
         document_ids=body.document_ids,
+        bm25_index=bm25_index,
     )
 
     if body.use_reranker:
-        chunks = rerank(body.question, results, top_k=k)
+        chunks = await rerank(body.question, results, top_k=k)
         retrieval_method = "hybrid+reranker"
     else:
         chunks = results[:k]
@@ -74,7 +70,8 @@ async def query_documents(
 @router.post("/stream")
 async def stream_query_documents(
     body: QueryRequest,
-    session: AsyncSession = Depends(_get_session),
+    session: AsyncSession = Depends(get_session),
+    bm25_index: tuple = Depends(get_bm25_index),
 ) -> StreamingResponse:
     """Stream the LLM answer token-by-token as newline-delimited JSON, then emit citations."""
     k = body.top_k
@@ -84,10 +81,11 @@ async def stream_query_documents(
         session,
         top_k=k * 2,
         document_ids=body.document_ids,
+        bm25_index=bm25_index,
     )
 
     if body.use_reranker:
-        chunks = rerank(body.question, results, top_k=k)
+        chunks = await rerank(body.question, results, top_k=k)
     else:
         chunks = results[:k]
 

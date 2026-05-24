@@ -143,6 +143,15 @@ def parse_document(file_path: Path, document_id: UUID, source_filename: str | No
         return parse_pdf(file_path, document_id, source_filename=display_name)
 
     if suffix == ".docx":
+        docx_tmp = Document(str(file_path))
+        section_count = len(docx_tmp.paragraphs)
+        if section_count > settings.max_pages:
+            raise DocumentTooLargeError(
+                filename=display_name,
+                limit_type="sections",
+                actual=section_count,
+                limit=settings.max_pages,
+            )
         return parse_docx(file_path, document_id, source_filename=display_name)
 
     raise UnsupportedFormatError(filename=display_name, detected_type=suffix)

@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import time
 from datetime import UTC, datetime
@@ -47,7 +48,8 @@ async def embed_chunks(chunks: list[TextChunk]) -> list[EmbeddedChunk]:
     model = _get_embed_model()
 
     try:
-        embeddings = model.encode([c.text for c in chunks], show_progress_bar=False).tolist()
+        raw = await asyncio.to_thread(model.encode, [c.text for c in chunks], show_progress_bar=False)
+        embeddings = raw.tolist()
     except Exception as exc:
         raise EmbeddingError(str(exc)) from exc
 
@@ -105,39 +107,6 @@ async def store_in_chroma(embedded: list[EmbeddedChunk], collection_name: str | 
     logger.info("Stored %d chunk(s) in ChromaDB collection '%s'", len(embedded), resolved_name)
 
 
-async def store_in_postgres(document_id: UUID, filename: str, chunks: list[TextChunk], session: AsyncSession) -> None:
-    """Persist a document record and its chunks to PostgreSQL.
-
-    Args:
-        document_id: UUID of the document being stored.
-        filename: Original filename, used for display.
-        chunks: Text chunks to store as Chunk rows.
-        session: Active async SQLAlchemy session.
-    """
-    doc = Document(
-        id=document_id,
-        filename=filename,
-        upload_time=datetime.now(UTC),
-        num_chunks=len(chunks),
-        status=DocumentStatus.ready,
-        file_size_bytes=0,
-    )
-    session.add(doc)
-
-    for chunk in chunks:
-        session.add(
-            Chunk(
-                document_id=document_id,
-                chunk_index=chunk.chunk_index,
-                text=chunk.text,
-                page_number=chunk.page_number,
-                section_header=chunk.section_header,
-                chroma_id=f"{document_id}_{chunk.chunk_index}",
-            )
-        )
-
-    await session.commit()
-
 
 async def ingest_document(file_path: Path, session: AsyncSession, original_filename: str | None = None) -> UUID:
     """Run the full ingestion pipeline for a single document.
@@ -171,10 +140,14 @@ async def ingest_document(file_path: Path, session: AsyncSession, original_filen
     session.add(doc)
     await session.commit()
 
+    written_ids: list[str] = []
+
     try:
         sections = parse_document(file_path, document_id, source_filename=filename)
         chunks = chunk_sections(sections)
         embedded = await embed_chunks(chunks)
+
+        written_ids = [f"{document_id}_{chunk.chunk_index}" for chunk in chunks]
         await store_in_chroma(embedded)
 
         for chunk in chunks:
@@ -199,6 +172,20 @@ async def ingest_document(file_path: Path, session: AsyncSession, original_filen
     except Exception as exc:
         logger.error("Ingestion failed for '%s': %s", filename, exc)
         await session.rollback()
+
+        if written_ids:
+            try:
+                client = await chromadb.AsyncHttpClient(host=settings.chroma_host, port=settings.chroma_port)
+                collection = await client.get_collection(settings.chroma_collection)
+                await collection.delete(ids=written_ids)
+                logger.info("Rolled back %d ChromaDB vector(s) for document_id=%s", len(written_ids), document_id)
+            except Exception as chroma_exc:
+                logger.error(
+                    "Failed to clean up ChromaDB vectors after rollback for document_id=%s: %s",
+                    document_id,
+                    chroma_exc,
+                )
+
         doc.status = DocumentStatus.failed
         doc.error_message = str(exc)
         session.add(doc)

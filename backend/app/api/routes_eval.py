@@ -7,9 +7,10 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.dependencies import get_session
 from app.evaluation.metrics import EvalResult
 from app.evaluation.run_eval import run_evaluation
-from app.models.database import EvaluationRun, get_async_session
+from app.models.database import EvaluationRun
 
 logger = logging.getLogger(__name__)
 
@@ -35,14 +36,8 @@ class EvalRunDetailResponse(BaseModel):
     results: list[EvalResult]
 
 
-async def _get_session() -> AsyncSession:
-    session_factory = get_async_session()
-    async with session_factory() as session:
-        yield session
-
-
 @router.post("/run", response_model=EvalRunSummaryResponse)
-async def trigger_evaluation(session: AsyncSession = Depends(_get_session)) -> EvalRunSummaryResponse:
+async def trigger_evaluation(session: AsyncSession = Depends(get_session)) -> EvalRunSummaryResponse:
     """Trigger an evaluation run over the golden dataset and return the summary."""
     await run_evaluation(session)
 
@@ -62,7 +57,7 @@ async def trigger_evaluation(session: AsyncSession = Depends(_get_session)) -> E
 
 @router.get("/results", response_model=EvalRunListResponse)
 async def list_evaluation_runs(
-    session: AsyncSession = Depends(_get_session),
+    session: AsyncSession = Depends(get_session),
 ) -> EvalRunListResponse:
     """Return all stored evaluation runs ordered by creation time descending."""
     stmt = select(EvaluationRun).order_by(EvaluationRun.created_at.desc())
@@ -83,7 +78,7 @@ async def list_evaluation_runs(
 @router.get("/results/{run_id}", response_model=EvalRunDetailResponse)
 async def get_evaluation_run(
     run_id: uuid.UUID,
-    session: AsyncSession = Depends(_get_session),
+    session: AsyncSession = Depends(get_session),
 ) -> EvalRunDetailResponse:
     """Return the full detail of a single evaluation run including per-question results."""
     stmt = select(EvaluationRun).where(EvaluationRun.id == run_id)

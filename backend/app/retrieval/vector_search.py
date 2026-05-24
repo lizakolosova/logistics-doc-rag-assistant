@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import time
 from typing import Any
@@ -42,7 +43,7 @@ async def vector_search(
 
     try:
         model = _get_embed_model()
-        query_embedding: list[float] = model.encode([query])[0].tolist()
+        query_embedding: list[float] = (await asyncio.to_thread(model.encode, [query]))[0].tolist()
     except Exception as exc:
         raise RetrievalError(str(exc)) from exc
 

@@ -25,7 +25,7 @@ async def _evaluate_single(qa: GoldenQA, session: AsyncSession) -> EvalResult:
     start = time.monotonic()
 
     raw_results = await hybrid_search(qa.question, session, top_k=settings.retrieval_top_k)
-    chunks = rerank(qa.question, raw_results, top_k=settings.rerank_top_k)
+    chunks = await rerank(qa.question, raw_results, top_k=settings.rerank_top_k)
 
     retrieval_metrics = compute_retrieval_metrics(qa, chunks)
 

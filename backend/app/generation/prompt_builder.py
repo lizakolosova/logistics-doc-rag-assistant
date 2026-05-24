@@ -1,10 +1,9 @@
 import logging
 
+from app.config import settings
 from app.models.schemas import Citation, RetrievedChunk
 
 logger = logging.getLogger(__name__)
-
-_CHUNK_MAX_CHARS = 1500
 
 _SYSTEM_PROMPT = (
     "You are a legal document assistant. Answer questions based ONLY on the provided context. "
@@ -43,8 +42,8 @@ def build_messages(question: str, chunks: list[RetrievedChunk]) -> list[dict]:
     context_parts: list[str] = []
     for i, chunk in enumerate(chunks, start=1):
         text = chunk.text
-        if len(text) > _CHUNK_MAX_CHARS:
-            text = text[:_CHUNK_MAX_CHARS] + "..."
+        if len(text) > settings.prompt_chunk_max_chars:
+            text = text[:settings.prompt_chunk_max_chars] + "..."
         context_parts.append(
             f"[{i}] Source: {chunk.source_file}, Page {chunk.page_number}\n{text}\n---"
         )

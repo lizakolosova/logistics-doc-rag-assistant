@@ -5,7 +5,9 @@ from typing import AsyncGenerator
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from app.config import settings
 from app.exceptions import (
     AppError,
     DocumentParseError,
@@ -15,7 +17,7 @@ from app.exceptions import (
     UnsupportedFormatError,
 )
 
-from app.models.database import Base, get_async_engine
+from app.models.database import Base
 from app.api.routes_documents import router as documents_router
 from app.api.routes_eval import router as eval_router
 from app.api.routes_query import router as query_router
@@ -25,12 +27,21 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    """Create database tables on startup; yield control to the application."""
-    engine = get_async_engine()
+    """Create the shared engine + session factory on startup; dispose on shutdown."""
+    engine = create_async_engine(settings.postgres_url, echo=False)
+    app.state.engine = engine
+    app.state.session_factory = async_sessionmaker(engine, expire_on_commit=False)
+    app.state.bm25_cache = None
+    app.state.bm25_dirty = True
+
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     logger.info("Database tables ensured")
+
     yield
+
+    await engine.dispose()
+    logger.info("Database engine disposed")
 
 
 app = FastAPI(

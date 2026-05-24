@@ -3,12 +3,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from app.dependencies import get_bm25_index, get_session
 from app.exceptions import RetrievalError
 from app.models.schemas import RetrievedChunk
 from app.retrieval.reranker import rerank
 import httpx
 
-from app.api.routes_query import _get_session
 from app.main import app
 
 
@@ -32,7 +32,7 @@ def _make_st_mock(scores: list[float]) -> tuple[MagicMock, MagicMock]:
     return mock_st, mock_encoder
 
 
-def test_rerank_returns_top_k() -> None:
+async def test_rerank_returns_top_k() -> None:
     doc_id = "doc-1"
     chunks = [
         _make_chunk("c1", doc_id, 0.5),
@@ -43,7 +43,7 @@ def test_rerank_returns_top_k() -> None:
 
     with patch("app.retrieval.reranker._cross_encoder", None):
         with patch.dict(sys.modules, {"sentence_transformers": mock_st}):
-            result = rerank("indemnity clause", chunks, top_k=2)
+            result = await rerank("indemnity clause", chunks, top_k=2)
 
     assert len(result) == 2
     assert all(isinstance(r, RetrievedChunk) for r in result)
@@ -52,13 +52,13 @@ def test_rerank_returns_top_k() -> None:
     assert result[0].score > result[1].score
 
 
-def test_rerank_empty_input_returns_empty() -> None:
-    result = rerank("anything", [], top_k=5)
+async def test_rerank_empty_input_returns_empty() -> None:
+    result = await rerank("anything", [], top_k=5)
 
     assert result == []
 
 
-def test_rerank_scores_replace_original_scores() -> None:
+async def test_rerank_scores_replace_original_scores() -> None:
     doc_id = "doc-1"
     chunks = [
         _make_chunk("c1", doc_id, 0.1),  # low original score
@@ -68,7 +68,7 @@ def test_rerank_scores_replace_original_scores() -> None:
 
     with patch("app.retrieval.reranker._cross_encoder", None):
         with patch.dict(sys.modules, {"sentence_transformers": mock_st}):
-            result = rerank("clause", chunks, top_k=2)
+            result = await rerank("clause", chunks, top_k=2)
 
     assert result[0].chunk_id == "c1"  # flipped: reranker preferred c1
     assert result[1].chunk_id == "c2"
@@ -76,7 +76,7 @@ def test_rerank_scores_replace_original_scores() -> None:
     assert result[1].score == pytest.approx(2.3)
 
 
-def test_rerank_raises_on_model_failure() -> None:
+async def test_rerank_raises_on_model_failure() -> None:
     doc_id = "doc-1"
     chunks = [_make_chunk("c1", doc_id)]
 
@@ -88,21 +88,26 @@ def test_rerank_raises_on_model_failure() -> None:
     with patch("app.retrieval.reranker._cross_encoder", None):
         with patch.dict(sys.modules, {"sentence_transformers": mock_st}):
             with pytest.raises(RetrievalError, match="CUDA out of memory"):
-                rerank("test query", chunks)
+                await rerank("test query", chunks)
 
 
 async def test_query_endpoint_full_pipeline() -> None:
     doc_id = "doc-1"
     hybrid_chunks = [_make_chunk(f"c{i}", doc_id, 0.9 - i * 0.1) for i in range(1, 5)]
     reranked = [_make_chunk("c2", doc_id, 9.1), _make_chunk("c1", doc_id, 7.2)]
+    fake_bm25 = (MagicMock(), [])
 
     async def mock_session_dep():
         yield AsyncMock()
 
-    app.dependency_overrides[_get_session] = mock_session_dep
+    async def mock_bm25_dep():
+        return fake_bm25
+
+    app.dependency_overrides[get_session] = mock_session_dep
+    app.dependency_overrides[get_bm25_index] = mock_bm25_dep
 
     mock_hybrid = AsyncMock(return_value=hybrid_chunks)
-    mock_rerank = MagicMock(return_value=reranked)
+    mock_rerank = AsyncMock(return_value=reranked)
     mock_generate = AsyncMock(return_value="The indemnity clause provides...")
     mock_build = MagicMock(return_value=[{"role": "user", "content": "..."}])
     mock_citations = MagicMock(return_value=[])

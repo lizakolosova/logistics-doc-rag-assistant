@@ -1,5 +1,5 @@
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, call, patch
 from uuid import uuid4
 
 import pytest
@@ -7,7 +7,7 @@ import pytest
 from app.exceptions import EmbeddingError
 from app.ingestion.embedder import embed_chunks, ingest_document, store_in_chroma
 from app.models.database import Document
-from app.models.schemas import DocumentStatus, TextChunk
+from app.models.schemas import DocumentStatus, EmbeddedChunk, TextChunk
 
 
 def _make_chunks(n: int) -> list[TextChunk]:
@@ -168,3 +168,120 @@ async def test_ingest_document_returns_uuid_on_success(tmp_path: Path) -> None:
     assert isinstance(result, UUID)
     assert doc_id_holder, "Expected Document to be added to the session"
     assert doc_id_holder[-1].status == DocumentStatus.ready
+
+
+async def test_ingest_document_cleans_up_chroma_on_postgres_failure(tmp_path: Path) -> None:
+    """Finding #5: if Postgres commit fails after ChromaDB write, cleanup must delete the vectors."""
+    file_path = tmp_path / "contract.pdf"
+    file_path.write_bytes(b"dummy content")
+
+    fake_chunks = _make_chunks(2)
+    doc_id = fake_chunks[0].document_id
+    fake_embedded = [
+        EmbeddedChunk(
+            chunk_id=c.chunk_id,
+            document_id=c.document_id,
+            text=c.text,
+            chunk_index=c.chunk_index,
+            page_number=c.page_number,
+            source_file=c.source_file,
+            section_header=c.section_header,
+            embedding=[0.1] * 384,
+        )
+        for c in fake_chunks
+    ]
+
+    commit_call = 0
+
+    async def flaky_commit():
+        nonlocal commit_call
+        commit_call += 1
+        if commit_call >= 2:
+            raise RuntimeError("Postgres commit failed")
+
+    mock_session = _make_mock_session()
+    mock_session.commit.side_effect = flaky_commit
+
+    mock_collection = AsyncMock()
+    mock_client = AsyncMock()
+    mock_client.get_collection = AsyncMock(return_value=mock_collection)
+    mock_chromadb = MagicMock()
+    mock_chromadb.AsyncHttpClient = AsyncMock(return_value=mock_client)
+
+    fake_section = MagicMock(
+        document_id=doc_id,
+        source_file="contract.pdf",
+        page_number=1,
+        section_header=None,
+        text="some legal text",
+        section_index=0,
+    )
+
+    with (
+        patch("app.ingestion.embedder.parse_document", return_value=[fake_section]),
+        patch("app.ingestion.embedder.chunk_sections", return_value=fake_chunks),
+        patch("app.ingestion.embedder.embed_chunks", return_value=fake_embedded),
+        patch("app.ingestion.embedder.store_in_chroma", new_callable=AsyncMock),
+        patch("app.ingestion.embedder.chromadb", mock_chromadb),
+    ):
+        with pytest.raises(RuntimeError, match="Postgres commit failed"):
+            await ingest_document(file_path, mock_session)
+
+    mock_collection.delete.assert_called_once()
+    deleted_ids = mock_collection.delete.call_args.kwargs["ids"]
+    assert len(deleted_ids) == len(fake_chunks)
+
+
+async def test_ingest_document_logs_error_when_chroma_cleanup_fails(tmp_path: Path) -> None:
+    """Finding #5: if ChromaDB cleanup also fails, log error and re-raise original exception."""
+    file_path = tmp_path / "contract.pdf"
+    file_path.write_bytes(b"dummy content")
+
+    fake_chunks = _make_chunks(1)
+    fake_embedded = [
+        EmbeddedChunk(
+            chunk_id=c.chunk_id,
+            document_id=c.document_id,
+            text=c.text,
+            chunk_index=c.chunk_index,
+            page_number=c.page_number,
+            source_file=c.source_file,
+            section_header=c.section_header,
+            embedding=[0.1] * 384,
+        )
+        for c in fake_chunks
+    ]
+
+    commit_call = 0
+
+    async def flaky_commit():
+        nonlocal commit_call
+        commit_call += 1
+        if commit_call >= 2:
+            raise RuntimeError("Postgres commit failed")
+
+    mock_session = _make_mock_session()
+    mock_session.commit.side_effect = flaky_commit
+
+    mock_chromadb = MagicMock()
+    mock_chromadb.AsyncHttpClient = AsyncMock(side_effect=RuntimeError("ChromaDB also down"))
+
+    fake_section = MagicMock(
+        document_id=fake_chunks[0].document_id,
+        source_file="contract.pdf",
+        page_number=1,
+        section_header=None,
+        text="some legal text",
+        section_index=0,
+    )
+
+    with (
+        patch("app.ingestion.embedder.parse_document", return_value=[fake_section]),
+        patch("app.ingestion.embedder.chunk_sections", return_value=fake_chunks),
+        patch("app.ingestion.embedder.embed_chunks", return_value=fake_embedded),
+        patch("app.ingestion.embedder.store_in_chroma", new_callable=AsyncMock),
+        patch("app.ingestion.embedder.chromadb", mock_chromadb),
+    ):
+        # The original Postgres exception must be re-raised, not the ChromaDB one
+        with pytest.raises(RuntimeError, match="Postgres commit failed"):
+            await ingest_document(file_path, mock_session)

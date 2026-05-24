@@ -3,7 +3,6 @@ from datetime import UTC, datetime
 
 from sqlalchemy import BigInteger, DateTime, Enum as SAEnum, ForeignKey, Integer, JSON, String, Text
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 from app.config import settings
@@ -63,12 +62,3 @@ class EvaluationRun(Base):
     config: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
 
-def get_async_engine() -> AsyncEngine:
-    """Create an async SQLAlchemy engine from settings.postgres_url."""
-    return create_async_engine(settings.postgres_url, echo=False)
-
-
-def get_async_session() -> async_sessionmaker[AsyncSession]:
-    """Create and return an async session factory bound to a fresh engine."""
-    engine = get_async_engine()
-    return async_sessionmaker(engine, expire_on_commit=False)
